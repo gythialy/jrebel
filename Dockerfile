@@ -1,12 +1,14 @@
 FROM golang:1.19-alpine as builder
 WORKDIR /app/
-ENV GOPROXY=https://goproxy.cn
+ENV GOPROXY=https://goproxy.cn,direct
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o jrebel
+RUN \
+  apk --no-cache --update add git make && \
+  make build
 
 FROM alpine as runner
-ENV PORT=8877
+ENV PORT 8877
 WORKDIR /app
 EXPOSE $PORT
-COPY --from=builder /app/jrebel /app
+COPY --from=builder /app/bin/jrebel /app/jrebel
 CMD /app/jrebel -h 0.0.0.0 -p ${PORT}

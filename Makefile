@@ -126,6 +126,9 @@ all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
 releases: $(gz_releases) $(zip_releases)
 
+build: 
+	$(GOBUILD) -o $(BINDIR)/$(NAME)
+
 lint:
 	GOOS=darwin golangci-lint run ./...
 	GOOS=windows golangci-lint run ./...
