@@ -25,7 +25,8 @@ func main() {
 GET /uuid 生成随机串
 http://%s:%s/{uuid} 放入jrebel激活地址栏
 Vesion: %s
-BuildTime:%s`, port, host, port, constant.Version, constant.BuildTime)
+BuildTime:%s
+`, port, host, port, constant.Version, constant.BuildTime)
 
 	err := http.ListenAndServe(host+":"+port, nil)
 	if err != nil {

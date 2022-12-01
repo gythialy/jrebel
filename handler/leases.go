@@ -88,9 +88,17 @@ func ValidateConnection(w http.ResponseWriter, _ *http.Request) {
 }
 func Leases1(w http.ResponseWriter, request *http.Request) {
 	body, _ := io.ReadAll(request.Body)
-	values, _ := url.ParseRequestURI(string(body))
-	company := values.Query().Get("username")
-
-	jsonStr := fmt.Sprintf(leases1Str, company)
-	util.WriteJson(w, jsonStr)
+	content := string(body)
+	values, err := url.ParseRequestURI(fmt.Sprintf("http://localhost/?%s", content))
+	if err == nil {
+		query := values.Query()
+		fmt.Println(query)
+		company := query.Get("username")
+		jsonStr := fmt.Sprintf(leases1Str, company)
+		util.WriteJson(w, jsonStr)
+	} else {
+		fmt.Println(err.Error())
+		w.WriteHeader(500)
+		util.WriteJson(w, err.Error())
+	}
 }
