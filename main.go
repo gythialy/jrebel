@@ -15,11 +15,18 @@ func main() {
 	flag.StringVar(&port, "p", "9000", "端口,默认为9000")
 	flag.StringVar(&host, "h", "0.0.0.0", "绑定host,默认为0.0.0.0")
 	flag.Parse()
-	//1.注册处理器函数
+
 	http.HandleFunc("/uuid", handler.UUID)
-	http.HandleFunc("/jrebel/leases", handler.Leases)
-	http.HandleFunc("/jrebel/leases/1", handler.Leases1)
-	http.HandleFunc("/jrebel/validate-connection", handler.ValidateConnection)
+	leaseHandler := handler.NewHandler()
+	http.HandleFunc("/jrebel/leases", leaseHandler.Leases)
+	http.HandleFunc("/jrebel/leases/1", leaseHandler.Leases1)
+	http.HandleFunc("/agent/leases", leaseHandler.Leases)
+	http.HandleFunc("/agent/leases/1", leaseHandler.Leases1)
+	http.HandleFunc("/jrebel/validate-connection", leaseHandler.ValidateConnection)
+	http.HandleFunc("/rpc/ping.action", handler.PingHandler)
+	http.HandleFunc("/rpc/obtainTicket.action", handler.ObtainTicketHandler)
+	http.HandleFunc("/rpc/releaseTicket.action", handler.ReleaseTicketHandler)
+
 	fmt.Printf(`
 	启动成功 端口号: %s
 GET /uuid 生成随机串
@@ -33,5 +40,4 @@ BuildTime:%s
 		fmt.Printf("http.ListenAndServe() 函数执行错误,错误为:%v\n", err)
 		return
 	}
-
 }

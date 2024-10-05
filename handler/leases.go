@@ -1,16 +1,18 @@
 package handler
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/gythialy/jrebel/util"
-	"io"
+	"log"
+	"math/rand"
 	"net/http"
-	"net/url"
 	"strconv"
+	"time"
+
+	"github.com/gythialy/jrebel/module"
+	"github.com/gythialy/jrebel/util"
 )
 
-const leasesStr = `{
+const (
+	defaultLease = `{
     "serverVersion": "3.2.4",
     "serverProtocolVersion": "1.1",
     "serverGuid": "a1b4aea8-b031-4302-b602-670a990272cb",
@@ -18,13 +20,13 @@ const leasesStr = `{
     "id": 1,
     "licenseType": 1,
     "evaluationLicense": false,
-    "signature": "OJE9wGg2xncSb+VgnYT+9HGCFaLOk28tneMFhCbpVMKoC/Iq4LuaDKPirBjG4o394/UjCDGgTBpIrzcXNPdVxVr8PnQzpy7ZSToGO8wv/KIWZT9/ba7bDbA8/RZ4B37YkCeXhjaixpmoyz/CIZMnei4q7oWR7DYUOlOcEWDQhiY=",
-    "serverRandomness": "H2ulzLlh7E0=",
+    "signature": "",
+    "serverRandomness": "",
     "seatPoolType": "standalone",
     "statusCode": "SUCCESS",
-    "offline": %t,
-    "validFrom": %s,
-    "validUntil": %s,
+    "offline": false,
+    "validFrom": null,
+    "validUntil": null,
     "company": "Administrator",
     "orderId": "",
     "zeroIds": [
@@ -33,7 +35,8 @@ const leasesStr = `{
     "licenseValidFrom": 1490544001000,
     "licenseValidUntil": 1691839999000
 	}`
-const validateConnStr = `{
+
+	defaultValidateConnection = `{
     "serverVersion": "3.2.4",
     "serverProtocolVersion": "1.1",
     "serverGuid": "a1b4aea8-b031-4302-b602-670a990272cb",
@@ -44,8 +47,9 @@ const validateConnStr = `{
     "licenseType": 1,
     "evaluationLicense": false,
     "seatPoolType": "standalone"
-}`
-const leases1Str = `{
+	}`
+
+	defaultLease1 = `{
     "serverVersion": "3.2.4",
     "serverProtocolVersion": "1.1",
     "serverGuid": "a1b4aea8-b031-4302-b602-670a990272cb",
@@ -53,52 +57,119 @@ const leases1Str = `{
     "statusCode": "SUCCESS",
     "msg": null,
     "statusMessage": null,
-    "company": %s,
-}`
+    "company": ""
+	}`
 
-func Leases(w http.ResponseWriter, request *http.Request) {
-	values := util.GetUrlParams(request)
-	randomness := values.Get("randomness")
-	username := values.Get("username")
-	clientTime := values.Get("clientTime")
-	guid := values.Get("guid")
-	offline, _ := strconv.ParseBool(values.Get("offline"))
+	randCharset       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+	allRandCharsetLen = len(randCharset)
+)
+
+func serverRandomness() (serverRandomness string) {
+	b := make([]byte, 11)
+	for i := 0; i < 11; i++ {
+		b[i] = randCharset[rand.Intn(allRandCharsetLen)]
+	}
+	return string(b) + "="
+}
+
+type LeaseHandler struct {
+	Lease        module.Lease
+	Lease1       module.Lease1
+	ValidateConn module.ValidateConnection
+	singer       *util.Signer
+}
+
+func NewHandler() *LeaseHandler {
+	handler := LeaseHandler{
+		singer: util.NewSigner(),
+	}
+	if lease, err := util.FromJson[module.Lease](defaultLease); err == nil {
+		handler.Lease = lease
+	} else {
+		log.Fatalln(err)
+	}
+
+	if lease1, err := util.FromJson[module.Lease1](defaultLease1); err == nil {
+		handler.Lease1 = lease1
+	} else {
+		log.Fatalln(err)
+	}
+
+	if validateConn, err := util.FromJson[module.ValidateConnection](defaultValidateConnection); err == nil {
+		handler.ValidateConn = validateConn
+	} else {
+		log.Fatalln(err)
+	}
+	return &handler
+}
+
+func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
+	params := util.UrlParams(request)
+	randomness := params.Get("randomness")
+	username := params.Get("username")
+	guid := params.Get("guid")
+	offline, err := strconv.ParseBool(params.Get("offline"))
+	if err != nil {
+		offline = true
+	}
 	validFrom := "null"
 	validUntil := "null"
+	lease := l.Lease
 	if offline {
-		ct, _ := strconv.ParseUint(clientTime, 10, 64)
-		clientTimeUntil := ct + 180*24*60*60*1000
+		clientTime := params.Get("clientTime")
+		offlineDays := params.Get("offlineDays")
+		startTimeInt, err := strconv.ParseInt(clientTime, 10, 64)
+		if err != nil {
+			startTimeInt = int64(time.Now().Second()) * 1000
+		}
+
+		offlineDaysInt, err := strconv.ParseInt(offlineDays, 10, 64)
+		if err != nil {
+			offlineDaysInt = int64(10)
+		}
+		expireTime := startTimeInt + (offlineDaysInt * 24 * 60 * 60 * 1000)
+		lease.Offline = offline
+		lease.ValidFrom = startTimeInt
+		lease.ValidUntil = expireTime
+
 		validFrom = clientTime
-		validUntil = strconv.FormatUint(clientTimeUntil, 10)
+		validUntil = strconv.FormatInt(expireTime, 10)
 	}
-	data := fmt.Sprintf(leasesStr, offline, validFrom, validUntil)
-	var jsonObject map[string]interface{}
-	_ = json.Unmarshal([]byte(data), &jsonObject)
 	if randomness == "" || username == "" || guid == "" {
-		w.WriteHeader(403)
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	serverRandomness := serverRandomness()
+	if signature, err := l.singer.SignLease(randomness, serverRandomness, guid, offline, validFrom, validUntil); err == nil {
+		lease.Signature = signature
+		lease.Company = username
+		lease.ServerRandomness = serverRandomness
+		response(w, lease)
 	} else {
-		signature := util.RSA{}.Sign(randomness, guid, offline, validFrom, validUntil)
-		jsonObject["signature"] = signature
-		jsonObject["company"] = username
-		util.WriteJson(w, jsonObject)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
-func ValidateConnection(w http.ResponseWriter, _ *http.Request) {
-	util.WriteJson(w, validateConnStr)
+
+func (l *LeaseHandler) ValidateConnection(w http.ResponseWriter, _ *http.Request) {
+	response(w, l.ValidateConn)
 }
-func Leases1(w http.ResponseWriter, request *http.Request) {
-	body, _ := io.ReadAll(request.Body)
-	content := string(body)
-	values, err := url.ParseRequestURI(fmt.Sprintf("http://localhost/?%s", content))
-	if err == nil {
-		query := values.Query()
-		fmt.Println(query)
-		company := query.Get("username")
-		jsonStr := fmt.Sprintf(leases1Str, company)
-		util.WriteJson(w, jsonStr)
+
+func (l *LeaseHandler) Leases1(w http.ResponseWriter, request *http.Request) {
+	values := util.UrlParams(request)
+	company := values.Get("username")
+	lease1 := l.Lease1
+	if company != "" {
+		lease1.Company = company
+	}
+	response(w, lease1)
+}
+
+func response(w http.ResponseWriter, body interface{}) {
+	if content, err := util.ToJson(body); err == nil {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("content-type", "application/json;charset=utf-8")
+		_, _ = w.Write([]byte(content))
 	} else {
-		fmt.Println(err.Error())
-		w.WriteHeader(500)
-		util.WriteJson(w, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
