@@ -16,6 +16,11 @@ func main() {
 	flag.StringVar(&host, "h", "0.0.0.0", "绑定host,默认为0.0.0.0")
 	flag.Parse()
 
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<h1>Hello, jrebel!</h1>"))
+	})
 	http.HandleFunc("/uuid", handler.UUID)
 	leaseHandler := handler.NewHandler()
 	http.HandleFunc("/jrebel/leases", leaseHandler.Leases)

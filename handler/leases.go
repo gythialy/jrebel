@@ -30,7 +30,7 @@ const (
     "company": "Administrator",
     "orderId": "",
     "zeroIds": [
-        
+
     ],
     "licenseValidFrom": 1490544001000,
     "licenseValidUntil": 1691839999000
@@ -125,7 +125,7 @@ func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
 
 		offlineDaysInt, err := strconv.ParseInt(offlineDays, 10, 64)
 		if err != nil {
-			offlineDaysInt = int64(10)
+			offlineDaysInt = int64(90)
 		}
 		expireTime := startTimeInt + (offlineDaysInt * 24 * 60 * 60 * 1000)
 		lease.Offline = offline
