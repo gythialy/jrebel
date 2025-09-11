@@ -2,7 +2,8 @@ package handler
 
 import (
 	"log"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"net/http"
 	"strconv"
 	"time"
@@ -67,7 +68,12 @@ const (
 func serverRandomness() (serverRandomness string) {
 	b := make([]byte, 11)
 	for i := 0; i < 11; i++ {
-		b[i] = randCharset[rand.Intn(allRandCharsetLen)]
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(allRandCharsetLen)))
+		if err != nil {
+			// Fail securely: log fatal or panic if secure random failed
+			log.Fatalln("crypto/rand failed:", err)
+		}
+		b[i] = randCharset[num.Int64()]
 	}
 	return string(b) + "="
 }
