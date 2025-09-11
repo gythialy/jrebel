@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - master
+  release:
+    types: [published]
 
 jobs:
   build:
