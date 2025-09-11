@@ -9,6 +9,7 @@ func TestSigner_SignLease(t *testing.T) {
 	signer := NewSigner()
 	if lease, err := signer.SignLease("bTqakeUt614==",
 		"wdpQy7vZRgTWQIXjqA1VAAbSBLp9PsmQMHSMj6c8w6E==",
+		"a1b4aea8-b031-4302-b602-670a990272cb",
 		false, "validFrom", "validUntil"); err == nil {
 		t.Log(lease)
 	} else {
