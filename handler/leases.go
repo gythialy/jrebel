@@ -108,37 +108,50 @@ func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
 	randomness := params.Get("randomness")
 	username := params.Get("username")
 	guid := params.Get("guid")
-	offline, err := strconv.ParseBool(params.Get("offline"))
-	if err != nil {
-		offline = true
+
+	offline := false
+	if offlineParam := params.Get("offline"); offlineParam != "" {
+		if parsed, err := strconv.ParseBool(offlineParam); err == nil {
+			offline = parsed
+		}
 	}
+
 	validFrom := "null"
 	validUntil := "null"
 	lease := l.Lease
+
 	if offline {
 		clientTime := params.Get("clientTime")
 		offlineDays := params.Get("offlineDays")
+
 		startTimeInt, err := strconv.ParseInt(clientTime, 10, 64)
 		if err != nil {
-			startTimeInt = int64(time.Now().Second()) * 1000
+			startTimeInt = time.Now().UnixMilli()
 		}
 
 		offlineDaysInt, err := strconv.ParseInt(offlineDays, 10, 64)
 		if err != nil {
 			offlineDaysInt = int64(90)
 		}
+
+		if offlineDaysInt < 1 {
+			offlineDaysInt = 1
+		}
+
 		expireTime := startTimeInt + (offlineDaysInt * 24 * 60 * 60 * 1000)
 		lease.Offline = offline
 		lease.ValidFrom = startTimeInt
 		lease.ValidUntil = expireTime
 
-		validFrom = clientTime
+		validFrom = strconv.FormatInt(startTimeInt, 10)
 		validUntil = strconv.FormatInt(expireTime, 10)
 	}
+
 	if randomness == "" || username == "" || guid == "" {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+
 	serverRandomness := serverRandomness()
 	if signature, err := l.singer.SignLease(randomness, serverRandomness, guid, offline, validFrom, validUntil); err == nil {
 		lease.Signature = signature

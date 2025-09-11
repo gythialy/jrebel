@@ -16,13 +16,28 @@ func main() {
 	flag.StringVar(&host, "h", "0.0.0.0", "绑定host,默认为0.0.0.0")
 	flag.Parse()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Header().Add("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte("<h1>Hello, jrebel!</h1>"))
-	})
-	http.HandleFunc("/uuid", handler.UUID)
 	leaseHandler := handler.NewHandler()
+
+	// 处理根路径和UUID路径
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/" {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("<h1>Hello, jrebel!</h1>"))
+		} else if len(path) > 1 {
+			uuid := path[1:]
+			if isValidUUID(uuid) {
+				leaseHandler.Leases(w, r)
+			} else {
+				http.NotFound(w, r)
+			}
+		} else {
+			http.NotFound(w, r)
+		}
+	})
+
+	http.HandleFunc("/uuid", handler.UUID)
 	http.HandleFunc("/jrebel/leases", leaseHandler.Leases)
 	http.HandleFunc("/jrebel/leases/1", leaseHandler.Leases1)
 	http.HandleFunc("/agent/leases", leaseHandler.Leases)
@@ -45,4 +60,23 @@ BuildTime:%s
 		fmt.Printf("http.ListenAndServe() 函数执行错误,错误为:%v\n", err)
 		return
 	}
+}
+
+// isValidUUID UUID验证函数
+func isValidUUID(uuid string) bool {
+	if len(uuid) != 36 {
+		return false
+	}
+	for i, c := range uuid {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+		} else {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+				return false
+			}
+		}
+	}
+	return true
 }
