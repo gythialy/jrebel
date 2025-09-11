@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"html"
 
 	"github.com/gythialy/jrebel/util"
 )
@@ -34,7 +35,7 @@ func PingHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(403)
 		_, _ = fmt.Fprint(w)
 	} else {
-		xmlContent := "<PingResponse><message></message><responseCode>OK</responseCode><salt>" + salt + "</salt></PingResponse>"
+		xmlContent := "<PingResponse><message></message><responseCode>OK</responseCode><salt>" + html.EscapeString(salt) + "</salt></PingResponse>"
 		signature, err := signWithMd5([]byte(xmlContent))
 		if err != nil {
 			w.WriteHeader(http.StatusForbidden)
@@ -55,7 +56,7 @@ func ObtainTicketHandler(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	} else {
 		w.WriteHeader(http.StatusOK)
-		xmlContent := "<ObtainTicketResponse><message></message><prolongationPeriod>" + prolongationPeriod + "</prolongationPeriod><responseCode>OK</responseCode><salt>" + salt + "</salt><ticketId>1</ticketId><ticketProperties>licensee=" + username + "\tlicenseType=0\t</ticketProperties></ObtainTicketResponse>"
+		xmlContent := "<ObtainTicketResponse><message></message><prolongationPeriod>" + prolongationPeriod + "</prolongationPeriod><responseCode>OK</responseCode><salt>" + html.EscapeString(salt) + "</salt><ticketId>1</ticketId><ticketProperties>licensee=" + html.EscapeString(username) + "\tlicenseType=0\t</ticketProperties></ObtainTicketResponse>"
 		signature, err := signWithMd5([]byte(xmlContent))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
