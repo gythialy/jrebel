@@ -1,8 +1,9 @@
 package handler
 
 import (
-	"log"
 	"crypto/rand"
+	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -21,8 +22,8 @@ const (
     "id": 1,
     "licenseType": 1,
     "evaluationLicense": false,
-    "signature": "",
-    "serverRandomness": "",
+    "signature": "OJE9wGg2xncSb+VgnYT+9HGCFaLOk28tneMFhCbpVMKoC/Iq4LuaDKPirBjG4o394/UjCDGgTBpIrzcXNPdVxVr8PnQzpy7ZSToGO8wv/KIWZT9/ba7bDbA8/RZ4B37YkCeXhjaixpmoyz/CIZMnei4q7oWR7DYUOlOcEWDQhiY=",
+    "serverRandomness": "H2ulzLlh7E0=",
     "seatPoolType": "standalone",
     "statusCode": "SUCCESS",
     "offline": false,
@@ -30,11 +31,9 @@ const (
     "validUntil": null,
     "company": "Administrator",
     "orderId": "",
-    "zeroIds": [
-
-    ],
+    "zeroIds": [],
     "licenseValidFrom": 1490544001000,
-    "licenseValidUntil": 1691839999000
+    "licenseValidUntil": 1891839999000
 	}`
 
 	defaultValidateConnection = `{
@@ -58,8 +57,8 @@ const (
     "statusCode": "SUCCESS",
     "msg": null,
     "statusMessage": null,
-    "company": ""
-	}`
+	"signature": "dGVzdA=="
+}`
 
 	randCharset       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 	allRandCharsetLen = len(randCharset)
@@ -70,7 +69,6 @@ func serverRandomness() (serverRandomness string) {
 	for i := 0; i < 11; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(allRandCharsetLen)))
 		if err != nil {
-			// Fail securely: log fatal or panic if secure random failed
 			log.Fatalln("crypto/rand failed:", err)
 		}
 		b[i] = randCharset[num.Int64()]
@@ -90,6 +88,7 @@ func NewHandler() *LeaseHandler {
 		singer: util.NewSigner(),
 	}
 	if lease, err := util.FromJson[module.Lease](defaultLease); err == nil {
+		lease.LicenseValidUntil = time.Now().AddDate(3, 0, 0).UnixMilli()
 		handler.Lease = lease
 	} else {
 		log.Fatalln(err)
@@ -110,20 +109,29 @@ func NewHandler() *LeaseHandler {
 }
 
 func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
-	params := util.UrlParams(request)
-	randomness := params.Get("randomness")
-	username := params.Get("username")
-	guid := params.Get("guid")
-
-	offline := false
-	if offlineParam := params.Get("offline"); offlineParam != "" {
-		if parsed, err := strconv.ParseBool(offlineParam); err == nil {
-			offline = parsed
-		}
+	params, err := util.UrlParamsFromBody(request)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, "%s\n", err)
+		return
 	}
 
-	validFrom := "null"
-	validUntil := "null"
+	clientRandomness := params.Get("randomness")
+	username := params.Get("username")
+	guid := params.Get("guid")
+	if clientRandomness == "" || username == "" || guid == "" {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprint(w)
+		return
+	}
+
+	offline := false
+	if parsed, err := strconv.ParseBool(params.Get("offline")); err == nil {
+		offline = parsed
+	}
+
+	validFrom := ""
+	validUntil := ""
 	lease := l.Lease
 
 	if offline {
@@ -132,16 +140,12 @@ func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
 
 		startTimeInt, err := strconv.ParseInt(clientTime, 10, 64)
 		if err != nil {
-			startTimeInt = time.Now().UnixMilli()
+			startTimeInt = int64(time.Now().Second()) * 1000
 		}
 
 		offlineDaysInt, err := strconv.ParseInt(offlineDays, 10, 64)
 		if err != nil {
-			offlineDaysInt = int64(90)
-		}
-
-		if offlineDaysInt < 1 {
-			offlineDaysInt = 1
+			offlineDaysInt = 90
 		}
 
 		expireTime := startTimeInt + (offlineDaysInt * 24 * 60 * 60 * 1000)
@@ -149,23 +153,19 @@ func (l *LeaseHandler) Leases(w http.ResponseWriter, request *http.Request) {
 		lease.ValidFrom = startTimeInt
 		lease.ValidUntil = expireTime
 
-		validFrom = strconv.FormatInt(startTimeInt, 10)
+		validFrom = clientTime
 		validUntil = strconv.FormatInt(expireTime, 10)
 	}
 
-	if randomness == "" || username == "" || guid == "" {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-
-	serverRandomness := serverRandomness()
-	if signature, err := l.singer.SignLease(randomness, serverRandomness, guid, offline, validFrom, validUntil); err == nil {
+	srvRandomness := serverRandomness()
+	if signature, err := l.singer.SignLease(clientRandomness, srvRandomness, guid, offline, validFrom, validUntil); err == nil {
 		lease.Signature = signature
 		lease.Company = username
-		lease.ServerRandomness = serverRandomness
+		lease.ServerRandomness = srvRandomness
 		response(w, lease)
 	} else {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, "%s\n", err)
 	}
 }
 
@@ -174,7 +174,7 @@ func (l *LeaseHandler) ValidateConnection(w http.ResponseWriter, _ *http.Request
 }
 
 func (l *LeaseHandler) Leases1(w http.ResponseWriter, request *http.Request) {
-	values := util.UrlParams(request)
+	values, _ := util.UrlParamsFromBody(request)
 	company := values.Get("username")
 	lease1 := l.Lease1
 	if company != "" {
@@ -184,11 +184,13 @@ func (l *LeaseHandler) Leases1(w http.ResponseWriter, request *http.Request) {
 }
 
 func response(w http.ResponseWriter, body interface{}) {
-	if content, err := util.ToJson(body); err == nil {
-		w.WriteHeader(http.StatusOK)
-		w.Header().Add("content-type", "application/json;charset=utf-8")
-		_, _ = w.Write([]byte(content))
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
+	w.Header().Set("content-type", "application/json; charset=utf-8")
+	bodyData, err := util.ToJson(body)
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, "%s\n", err)
+		return
 	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = fmt.Fprintf(w, "%s\n", string(bodyData))
 }

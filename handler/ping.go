@@ -8,8 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"net/http"
 	"html"
+	"net/http"
 
 	"github.com/gythialy/jrebel/util"
 )
@@ -28,7 +28,7 @@ O98RPCU0nJg=
 
 func PingHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("content-type", "text/html; charset=utf-8")
-	params := util.UrlParams(req)
+	params, _ := util.UrlParamsFromBody(req)
 
 	salt := params.Get("salt")
 	if salt == "" {
@@ -47,7 +47,8 @@ func PingHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func ObtainTicketHandler(w http.ResponseWriter, req *http.Request) {
-	params := util.UrlParams(req)
+	w.Header().Add("content-type", "application/json; charset=utf-8")
+	params, _ := util.UrlParamsFromBody(req)
 	salt := params.Get("salt")
 	username := params.Get("username")
 	prolongationPeriod := "607875500"
@@ -70,7 +71,8 @@ func ObtainTicketHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func ReleaseTicketHandler(w http.ResponseWriter, req *http.Request) {
-	params := util.UrlParams(req)
+	w.Header().Add("content-type", "text/html; charset=utf-8")
+	params, _ := util.UrlParamsFromBody(req)
 
 	salt := params.Get("salt")
 	if salt == "" {

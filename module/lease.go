@@ -3,7 +3,7 @@ package module
 type Lease struct {
 	ServerVersion         string        `json:"serverVersion"`
 	ServerProtocolVersion string        `json:"serverProtocolVersion"`
-	ServerGuid            string        `json:"serverGuid"`
+	ServerGUID            string        `json:"serverGuid"`
 	GroupType             string        `json:"groupType"`
 	ID                    int           `json:"id"`
 	LicenseType           int           `json:"licenseType"`
@@ -13,8 +13,8 @@ type Lease struct {
 	SeatPoolType          string        `json:"seatPoolType"`
 	StatusCode            string        `json:"statusCode"`
 	Offline               bool          `json:"offline"`
-	ValidFrom             int64         `json:"validFrom,omitempty"`
-	ValidUntil            int64         `json:"validUntil,omitempty"`
+	ValidFrom             int64         `json:"validFrom"`
+	ValidUntil            int64         `json:"validUntil"`
 	Company               string        `json:"company"`
 	OrderID               string        `json:"orderId"`
 	ZeroIds               []interface{} `json:"zeroIds"`
